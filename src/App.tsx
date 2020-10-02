@@ -8,12 +8,23 @@ function Button(props: {
   text: string;
   onClick: () => void;
   eggCost: number;
+  buckBucksCost: number;
   buckBucksInInventory: number;
   eggsInInventory: number;
 }) {
   const [hovered, setHovered] = React.useState(false);
-  const { enabled, text, onClick, timeLeft: timeLeftMs, eggCost, buckBucksInInventory, eggsInInventory } = props;
+  const { enabled, text, onClick, timeLeft: timeLeftMs, eggCost, buckBucksCost, buckBucksInInventory, eggsInInventory } = props;
   const timeLeft = Math.ceil(timeLeftMs / 1000);
+
+  let cost = 0;
+  let unit = "";
+  if (eggCost > 0) {
+    cost = eggCost;
+    unit = "egg";
+  } else {
+    cost = buckBucksCost;
+    unit = "buckbuck"
+  }
 
   let content = (
     <>
@@ -22,7 +33,7 @@ function Button(props: {
       </div>
       <div>
         {
-          eggCost > 0 ? eggCost + " eggs " : ""
+          cost === 0 ? " " : (cost === 1 ? cost + " " + unit : cost + " " + unit + "s")
         }
 
         {
@@ -32,10 +43,16 @@ function Button(props: {
     </>
   );
 
-  if (hovered && eggCost > eggsInInventory) {
+  if (hovered && unit === "egg" && eggCost > eggsInInventory) {
     content = (
       <>
         {eggCost > 1 ? `You need ${eggCost} eggs to make that.` : `You need ${eggCost} egg to make that.`}
+      </>
+    );
+  } else if (hovered && unit === "buckbuck" && buckBucksCost > buckBucksCost) {
+    content = (
+      <>
+        {buckBucksCost > 1 ? `You need ${buckBucksCost} eggs to make that.` : `You need ${buckBucksCost} egg to make that.`}
       </>
     );
   }
@@ -117,12 +134,13 @@ function App() {
   const [eggs, setEggs] = React.useState(0);
   const [lastTimeLaidEgg, setLastTimeLaidEgg] = React.useState(0);
   const [lastTimeHatchedEgg, setLastTimeHatchedEgg] = React.useState(0);
-  const [chickenFeed, setChickenFeed] = React.useState(0);
+  const [chickenFeed, setChickenFeed] = React.useState(2);
   const [buckBucks, setBuckBucks] = React.useState(20);
   const [flour, setFlour] = React.useState(0);
   const [milk, setMilk] = React.useState(0);
 
   const [chickens, setChickens] = React.useState(0);
+  const [aliveChickenIds, setAliveChickenIds] = React.useState<number[]>([]);
 
   // bakery supply
   const [rawEggs, setRawEggs] = React.useState(0);
@@ -205,6 +223,8 @@ function App() {
     },
   ]);
 
+
+  // GAME LOOP
   useInterval(() => {
     const fps = 1000 / 50;
 
@@ -233,7 +253,33 @@ function App() {
 
     setEggs(eggs + chickens * 0.01);
 
-    setChickenFeed(Math.max(0, chickenFeed - chickens * 0.01));
+    setChickenFeed(Math.max(0, chickenFeed - (chickens + 1) * 0.01));
+
+    if (chickenFeed < 1 && chickens > 0) {
+      const r = Math.random();
+      
+      if (r < 0.005*chickens) {
+
+        const chickenNumber = aliveChickenIds[Math.floor(Math.random() * aliveChickenIds.length)]
+        setAliveChickenIds(aliveChickenIds => {return aliveChickenIds.filter(id => id !== chickenNumber)})
+
+        const deathMessages = ["A chicken was found dead in the night.",
+        `Chicken #${chickenNumber} was zombified.`,
+        "One of your sisters died of starvation", `Comrade #${chickenNumber} down!`, 
+        `Hen #${chickenNumber} took an L for the team!`,
+        `Chicken #${chickenNumber} tried to escape chicken storage. They died.`,
+        `Chicken #${chickenNumber} died. They should try harder next time.`,
+        `Chicken #${chickenNumber} tried testing the respawn system.`, ]
+
+        const deathMessage = deathMessages[Math.ceil(Math.random() * deathMessages.length)];
+        setChickens(chickens - 1);
+        setActivities([deathMessage, ...activities])
+      }
+    }
+
+    if (chickens === 0 && chickenFeed === 0 && Math.random() < 0.001) {
+      window.alert("oops u died uwu");
+    }
 
     forceUpdate();
   }, 50);
@@ -255,6 +301,7 @@ function App() {
         setEggs(eggs - 1);
         chickenId++;
         setActivities([`You hatched chicken #${chickenId}...`, ...activities]);
+        setAliveChickenIds([...aliveChickenIds, chickenId]);
         setLastTimeHatchedEgg(Date.now());
       } else {
         setActivities(["You dont have enough eggs to hatch an egg!!!!!", ...activities]);
@@ -272,7 +319,6 @@ function App() {
   }
 
   const renderActivities = () => {
-    const activitiesToShow = 50;
     let rv = [];
     for (let i = 0; i < Math.min(activities.length, 50); i++) {
       const color = 256 * Math.min(1, i / 20);
@@ -302,6 +348,7 @@ function App() {
 
           <Button
             eggCost={0}
+            buckBucksCost={0}
             eggsInInventory={eggs}
             buckBucksInInventory={buckBucks}
             enabled={Date.now() - lastTimeLaidEgg > LAY_EGG_TIMEOUT}
@@ -314,6 +361,7 @@ function App() {
 
           <Button
             eggCost={0}
+            buckBucksCost={0}
             eggsInInventory={eggs}
             buckBucksInInventory={buckBucks}
             enabled={Date.now() - lastTimeHatchedEgg > HATCH_EGG_TIMEOUT}
@@ -337,20 +385,27 @@ function App() {
                     const result = [...foodToMake];
                     const index = result.findIndex(x => x.name === name);
 
-                    setEggs(eggs => eggs - result[index].cost);
+                    if (eggs >= result[index].cost ) {
+                    
+                      setEggs(eggs => Math.max(0, eggs - result[index].cost));
+                      setFoodToMake(oldFoodToMake => {
+                        
+                        oldFoodToMake[index] = {
+                          ...oldFoodToMake[index],
+                          lastBoughtTs: Date.now(),
+                          count: oldFoodToMake[index].count + 0.5,
+                        };
+  
+                        return oldFoodToMake;
+                      });
+                    }
+                    
+                    
 
-                    setFoodToMake(oldFoodToMake => {
-                      oldFoodToMake[index] = {
-                        ...oldFoodToMake[index],
-                        lastBoughtTs: Date.now(),
-                        count: oldFoodToMake[index].count + 1,
-                      };
-
-                      return result;
-                    });
                   }}
                   text={name}
                   eggCost={cost}
+                  buckBucksCost={0}
                 />
               );
             })
@@ -360,7 +415,7 @@ function App() {
         </div>
 
         <div style={{ flex: 1, padding: 20 }}>
-          <div>
+          <div style ={{marginBottom: 2}}>
             storage
           </div>
           <Button
@@ -376,12 +431,13 @@ function App() {
             }}
             text={"buy feed"}
             eggCost={0}
+            buckBucksCost={25}
           />
-          <div style={{ padding: 8, margin: 8, border: "1px solid black" }}>
+          <div style={{ padding: 14, margin: "12px 8px 8px 8px", border: "1px solid black" }}>
             <div>chickens: {chickens} </div>
             <div>eggs: {Math.floor(eggs)} </div>
-            <div>chicken feed: {Math.floor(chickenFeed)}</div>
-            <div>bawk bucks: {buckBucks}</div>
+            <div style={{color: Math.floor(chickenFeed) === 0 ? "red" : "black"}}>chicken feed: {Math.floor(chickenFeed)}</div>
+            <div>buckbucks: {buckBucks}</div>
             <div>flour: {flour}</div>
             <div>milk: {milk}</div>
 
@@ -389,7 +445,7 @@ function App() {
           <div style={{ marginTop: 20, marginBottom: 2 }}>
             for sale
           </div>
-          <div style={{ padding: 8, margin: 8, border: "1px solid black" }}>
+          <div style={{ padding: 14, margin: 8, border: "1px solid black" }}>
             {
               foodToMake.map(({ name, count }) => {
                 return (
