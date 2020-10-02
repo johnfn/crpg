@@ -134,7 +134,7 @@ function App() {
   const [eggs, setEggs] = React.useState(0);
   const [lastTimeLaidEgg, setLastTimeLaidEgg] = React.useState(0);
   const [lastTimeHatchedEgg, setLastTimeHatchedEgg] = React.useState(0);
-  const [chickenFeed, setChickenFeed] = React.useState(2);
+  const [chickenFeed, setChickenFeed] = React.useState(50);
   const [buckBucks, setBuckBucks] = React.useState(20);
   const [flour, setFlour] = React.useState(0);
   const [milk, setMilk] = React.useState(0);
